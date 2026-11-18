@@ -61,12 +61,10 @@ local COLORS = {
     active  = { 120, 255, 120 },
     group   = { 170, 175, 190 },
     -- bind categories
-    spell   = { 159, 211, 255 },
-    ability = { 255, 227, 163 },
-    toggle  = { 255, 173, 102 },
-    cycle   = { 212, 173, 255 },
-    set     = { 127, 227, 198 },
-    other   = { 201, 204, 214 },
+    spell   = { 110, 190, 255 },   -- blue
+    ability = { 255, 215, 110 },   -- gold (job abilities, weapon skills, items)
+    auto    = { 255, 140, 70 },    -- orange (Auto... toggles and settings)
+    command = { 205, 170, 255 },   -- violet (everything else)
     -- modifier letters
     ctrl    = { 108, 182, 255 },
     alt     = { 126, 224, 126 },
@@ -440,8 +438,8 @@ local function title_text(view_name)
     t = t .. color('  [' .. view_name .. ']', COLORS.dim)
     local legend = color('- none ', COLORS.none) .. color('C Ctrl ', COLORS.ctrl) .. color('A Alt ', COLORS.alt)
         .. color('S Shift ', COLORS.shift) .. color('W Win', COLORS.win) .. '   '
-        .. color('spell ', COLORS.spell) .. color('ability ', COLORS.ability) .. color('toggle ', COLORS.toggle)
-        .. color('cycle ', COLORS.cycle) .. color('mode ', COLORS.set) .. color('other', COLORS.other)
+        .. color('spell  ', COLORS.spell) .. color('job ability  ', COLORS.ability)
+        .. color('auto  ', COLORS.auto) .. color('command', COLORS.command)
     return t .. '\n' .. legend
 end
 
@@ -537,7 +535,7 @@ local function draw_keyboard(ox, oy)
         for _, b in ipairs(list) do
             local dim = layer ~= '' and b.combo ~= layer
             if layer ~= '' and b.combo == layer then lit = true end
-            local c = dim and COLORS.dim or COLORS[b.cat] or COLORS.other
+            local c = dim and COLORS.dim or COLORS[b.cat] or COLORS.command
             for i, line in ipairs(bp.wrap(b.text, w)) do
                 local lead = i == 1 and badge(b.combo, bw, dim) or (' '):rep(bw)
                 out[#out + 1] = lead .. color(line, c)
@@ -605,8 +603,7 @@ end
 -- Cheat sheet view: grouped by kind, alphabetical, with the keys to press.
 -------------------------------------------------------------------------------
 local GROUPS = {
-    { 'spell', 'SPELLS' }, { 'ability', 'ABILITIES & WS' }, { 'toggle', 'TOGGLES' },
-    { 'cycle', 'CYCLES' }, { 'set', 'MODES' }, { 'other', 'OTHER' },
+    { 'spell', 'SPELLS' }, { 'ability', 'JOB ABILITIES' }, { 'auto', 'AUTO' }, { 'command', 'COMMANDS' },
 }
 
 local function draw_cheatsheet(ox, oy)

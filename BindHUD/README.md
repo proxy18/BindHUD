@@ -9,9 +9,14 @@ It is display-only. It never sends packets, never runs commands, never types int
 Switch with `//bh view`.
 
 - **Keyboard** (default): a full keyboard with every key in its real position. Each bound key lists all of its binds. The coloured letter in front of each bind is the modifier to hold: **C** Ctrl, **A** Alt, **S** Shift, **W** Win, **-** none. Holding a modifier lights up the keys for that layer and dims the other binds. The Ins/Del/arrow block appears when you have binds there, and the numpad when a numpad key is bound (see `//bh numpad`).
-- **Cheat sheet**: every action grouped into spells, abilities, toggles, cycles, modes and other, in alphabetical order, with the keys to press. Use it when you know the spell's name but not its key.
+- **Cheat sheet**: every action grouped into spells, job abilities, auto and commands, in alphabetical order, with the keys to press. Use it when you know the spell's name but not its key.
 
-Label colours: spell (blue), ability / weapon skill (gold), toggle (orange), cycle (violet), mode (teal), other (grey).
+Label colours:
+
+- **Spells** (blue): `/ma`, songs, ninjutsu
+- **Job abilities** (gold): `/ja`, weapon skills, pet commands, items
+- **Auto** (orange): GearSwap toggles and settings whose name starts with "Auto" (Auto Buff, Auto Stun, ...)
+- **Commands** (violet): everything else, such as mode cycles, `gs reload` and `/target`
 
 **Fits any screen.** Key sizes are measured from the font in game, and both views fit themselves to your screen's UI resolution. By default the keyboard keeps within half your screen's width and height (`//bh fit`): it narrows its labels and then steps its text down, stopping at text size 6 so it stays readable. On a small screen it can therefore stay larger than the limit. The cheat sheet uses fewer columns on narrow screens. If you set `//bh keywidth` yourself, your setting is used as-is.
 

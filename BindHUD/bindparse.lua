@@ -126,7 +126,10 @@ end
 local SPELL_VERBS = { ma = true, magic = true, song = true, so = true, ninjutsu = true, nin = true }
 
 -- Command -> readable label and a category used for colour:
--- 'spell' | 'ability' (JA/WS/items/pet) | 'toggle' | 'cycle' | 'set' | 'other'
+--   'spell'   - /ma (also songs and ninjutsu)
+--   'ability' - /ja, weapon skills, pet commands, items
+--   'auto'    - GearSwap toggles/settings whose name starts with "Auto" (AutoBuffMode...)
+--   'command' - everything else (mode cycles, gs reload, /target, ...)
 function M.describe(cmd)
     local c = trim(cmd)
 
@@ -136,13 +139,13 @@ function M.describe(cmd)
         local verb, args = slash:match('^/(%S+)%s*(.*)$')
         verb = verb and verb:lower()
         if (verb == 'target' or verb == 'ta') and args ~= '' then
-            return 'Target ' .. args, 'ability'
+            return 'Target ' .. args, 'command'
         end
         if verb and ACTION_VERBS[verb] then
             local name = args:match('^"([^"]+)"') or args:match("^'([^']+)'") or args:match('^(%S+)')
             if name then return name, SPELL_VERBS[verb] and 'spell' or 'ability' end
         end
-        return slash, 'other'
+        return slash, 'command'
     end
 
     -- gs c cycle OffenseMode / gs c toggle AutoCaress / gs c set DefenseMode Physical
@@ -150,17 +153,18 @@ function M.describe(cmd)
     if gsc then
         local w = split_words(gsc)
         local verb = (w[1] or ''):lower()
-        if (verb == 'cycle' or verb == 'cycleback') and w[2] then return readable(w[2]), 'cycle' end
-        if verb == 'toggle' and w[2] then return readable(w[2]), 'toggle' end
-        if verb == 'set' and w[2] and w[3] then return readable(w[2]) .. ': ' .. table.concat(w, ' ', 3), 'set' end
-        if verb == 'reset' and w[2] then return readable(w[2]) .. ': off', 'set' end
-        return gsc, 'other'
+        local cat = (w[2] and w[2]:lower():sub(1, 4) == 'auto') and 'auto' or 'command'
+        if (verb == 'cycle' or verb == 'cycleback') and w[2] then return readable(w[2]), cat end
+        if verb == 'toggle' and w[2] then return readable(w[2]), cat end
+        if verb == 'set' and w[2] and w[3] then return readable(w[2]) .. ': ' .. table.concat(w, ' ', 3), cat end
+        if verb == 'reset' and w[2] then return readable(w[2]) .. ': off', cat end
+        return gsc, 'command'
     end
 
     local set = c:match('^gs%s+equip%s+(%S+)')
-    if set then return 'Equip ' .. set:gsub('^sets%.', ''), 'other' end
+    if set then return 'Equip ' .. set:gsub('^sets%.', ''), 'command' end
 
-    return c, 'other'
+    return c, 'command'
 end
 
 -- Word-wrap text into lines of at most `width` characters. Words are never
