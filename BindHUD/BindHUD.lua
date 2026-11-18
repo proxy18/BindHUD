@@ -35,7 +35,7 @@ local defaults = {
     fit_height = 45,           -- ...and this % of the screen height
     show_targets = false,      -- show targeting binds (/ta, /target), e.g. alliance targeting on F1-F6
     layout = 'packed',         -- 'packed': only bound keys, in keyboard order | 'full': every key in its real position
-    opacity = 100,             -- 1-100: how solid the overlay is (100 = fully solid)
+    opacity = 50,              -- 1-100: how solid the overlay is (100 = fully solid)
     include_init = true,       -- read scripts/init.txt
     follow_includes = true,    -- follow include() in GearSwap files
     extra_files = '',          -- comma separated, {name} and {job} are substituted
@@ -255,7 +255,7 @@ end
 -------------------------------------------------------------------------------
 -- Overlay opacity as a 0-1 factor (//bh opacity, 1-100).
 local function opacity()
-    local o = tonumber(settings.opacity) or 100
+    local o = tonumber(settings.opacity) or 50
     return math.max(1, math.min(100, o)) / 100
 end
 
@@ -1041,7 +1041,7 @@ windower.register_event('addon command', function(cmd, ...)
         settings.opacity = math.max(1, math.min(100, math.floor(tonumber(args[1]) + 0.5)))
         msg('Opacity: ' .. settings.opacity .. '%')
     elseif cmd == 'opacity' then
-        msg('Opacity is ' .. (tonumber(settings.opacity) or 100) .. '%. Set it with //bh opacity <1-100>.')
+        msg('Opacity is ' .. (tonumber(settings.opacity) or 50) .. '%. Set it with //bh opacity <1-100>.')
         return
     elseif cmd == 'layout' then
         if arg == 'packed' or arg == 'full' then settings.layout = arg
