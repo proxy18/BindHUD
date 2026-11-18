@@ -48,7 +48,7 @@ Commented-out binds are ignored. If the same key and modifiers are bound twice, 
 | `//bh peek` | Switch between always shown (default) and peek, where it only appears while you hold a modifier |
 | `//bh size 10` | Text size; the keys resize to fit |
 | `//bh fit 65 45` | Keep the keyboard within this percentage of your screen's width and height (default 65% wide, 45% tall). `//bh fit off` turns it off so `//bh size` and `//bh keywidth` set the size |
-| `//bh opacity 80` | How solid the overlay is, from 1 (almost invisible) to 100 (fully solid). Default 50. Applies to the keys, text and title bar. `//bh opacity` on its own shows the current value |
+| `//bh opacity 80` | How solid the overlay is, from 1 (almost invisible) to 100 (fully solid). Default 60. Applies to the keys, text and title bar. `//bh opacity` on its own shows the current value |
 | `//bh layout` | Switch the keyboard between packed (only keys with binds, default) and full (every key in its real position) |
 | `//bh targets` | Show or hide targeting binds (`/ta`, `/target`), such as alliance targeting on Ctrl/Alt+F1-F6. Hidden by default |
 | `//bh keywidth 8` | Label characters per key. Smaller makes the keyboard narrower (long words break with a hyphen). `//bh keywidth auto` to reset |
