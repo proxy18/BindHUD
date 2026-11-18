@@ -1074,6 +1074,9 @@ windower.register_event('addon command', function(cmd, ...)
         return
     end
 
-    config.save(settings)
+    -- Commands change settings for every character, not just this one
+    -- (otherwise a new character keeps old values). Box positions are still
+    -- saved per character when you drag the overlay or use //bh pos.
+    config.save(settings, 'all')
     render()
 end)
