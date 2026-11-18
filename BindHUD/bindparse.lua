@@ -1,3 +1,6 @@
+-- BindHUD - Copyright (c) 2026 ProXy
+-- Licensed under the MIT License. See LICENSE for details.
+
 --[[
     bindparse.lua
     Pure-Lua helpers (no Windower APIs) that pull key binds out of

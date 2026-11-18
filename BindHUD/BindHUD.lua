@@ -1,3 +1,6 @@
+-- BindHUD - Copyright (c) 2026 ProXy
+-- Licensed under the MIT License. See LICENSE for details.
+
 --[[
     BindHUD - on-screen overlay of your keyboard binds.
 
@@ -16,7 +19,7 @@
 ]]
 
 _addon.name = 'BindHUD'
-_addon.author = 'BindHUD'
+_addon.author = 'ProXy'
 _addon.version = '0.3.1'
 _addon.commands = { 'bindhud', 'bh' }
 
