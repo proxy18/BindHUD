@@ -35,6 +35,7 @@ local defaults = {
     fit_height = 45,           -- ...and this % of the screen height
     show_targets = false,      -- show targeting binds (/ta, /target), e.g. alliance targeting on F1-F6
     layout = 'packed',         -- 'packed': only bound keys, in keyboard order | 'full': every key in its real position
+    opacity = 100,             -- 1-100: how solid the overlay is (100 = fully solid)
     include_init = true,       -- read scripts/init.txt
     follow_includes = true,    -- follow include() in GearSwap files
     extra_files = '',          -- comma separated, {name} and {job} are substituted
@@ -252,6 +253,12 @@ end
 -- pooled by id and reused between redraws; ids are handed out in draw order so a
 -- key's rectangle is always created before (and so drawn under) its text.
 -------------------------------------------------------------------------------
+-- Overlay opacity as a 0-1 factor (//bh opacity, 1-100).
+local function opacity()
+    local o = tonumber(settings.opacity) or 100
+    return math.max(1, math.min(100, o)) / 100
+end
+
 local PREFIX = 'bindhud_'
 local draw_size = nil                   -- text size for this redraw (can be shrunk to fit the screen)
 local pool = { prim = {}, text = {} }   -- names created so far
@@ -273,7 +280,7 @@ local function rect(x, y, w, h, c, alpha)
     end
     windower.prim.set_position(name, px(x), px(y))
     windower.prim.set_size(name, px(w), px(h))
-    windower.prim.set_color(name, alpha, c[1], c[2], c[3])
+    windower.prim.set_color(name, math.floor(alpha * opacity() + 0.5), c[1], c[2], c[3])
     windower.prim.set_visibility(name, true)
     used.prim[name] = true
 end
@@ -297,6 +304,7 @@ local function label(x, y, str, bold)
     windower.text.set_font(name, settings.display.text.font)
     windower.text.set_font_size(name, draw_size or settings.display.text.size)
     windower.text.set_bold(name, bold == true)
+    windower.text.set_color(name, math.floor(255 * opacity() + 0.5), 230, 230, 230)
     windower.text.set_location(name, px(x), px(y))
     windower.text.set_text(name, str)
     windower.text.set_visibility(name, true)
@@ -798,6 +806,11 @@ local function render()
     local view = settings.view == 'cheatsheet' and 'cheatsheet' or 'keyboard'
     box:text(title_text(view))
     box:show()
+    -- Title bar opacity. Set on the text object directly so the saved title-bar
+    -- settings keep their full values.
+    local t = settings.display
+    windower.text.set_bg_color(box._name, math.floor((t.bg.alpha or 200) * opacity() + 0.5), t.bg.red, t.bg.green, t.bg.blue)
+    windower.text.set_color(box._name, math.floor((t.text.alpha or 255) * opacity() + 0.5), t.text.red, t.text.green, t.text.blue)
 
     -- Keep the title bar on screen (e.g. after switching to a smaller resolution).
     local sw, sh = screen_size()
@@ -969,6 +982,7 @@ local HELP = {
     '//bh fit <w%> [h%]|off   largest share of the screen the keyboard may use (default 65 45)',
     '//bh targets on|off       show or hide targeting binds (/ta, /target)',
     '//bh layout packed|full   only keys with binds (default), or the full keyboard',
+    '//bh opacity <1-100>      how solid the overlay is (100 = fully solid)',
     '//bh keywidth <n>|auto    label characters per key (smaller = narrower keyboard)',
     '//bh numpad auto|on|off   numpad block: only when bound (auto), always, or never',
     '//bh pos <x> <y>     move the overlay (or drag its title bar)',
@@ -1023,6 +1037,12 @@ windower.register_event('addon command', function(cmd, ...)
             if tonumber(args[2]) then settings.fit_height = clamp(tonumber(args[2])) end
             msg(('Keyboard fits within %d%% of the screen width and %d%% of its height.'):format(settings.fit_width, settings.fit_height))
         end
+    elseif cmd == 'opacity' and tonumber(args[1]) then
+        settings.opacity = math.max(1, math.min(100, math.floor(tonumber(args[1]) + 0.5)))
+        msg('Opacity: ' .. settings.opacity .. '%')
+    elseif cmd == 'opacity' then
+        msg('Opacity is ' .. (tonumber(settings.opacity) or 100) .. '%. Set it with //bh opacity <1-100>.')
+        return
     elseif cmd == 'layout' then
         if arg == 'packed' or arg == 'full' then settings.layout = arg
         else settings.layout = settings.layout == 'full' and 'packed' or 'full' end
