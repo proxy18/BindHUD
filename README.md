@@ -5,3 +5,7 @@ A Windower 4 addon for Final Fantasy XI that shows your keyboard binds on screen
 It is display-only: it sends no packets, runs no commands and writes nothing to the chat log.
 
 The addon lives in [BindHUD/](BindHUD/). See [BindHUD/README.md](BindHUD/README.md) for install steps and commands.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
