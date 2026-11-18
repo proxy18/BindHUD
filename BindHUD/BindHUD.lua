@@ -275,8 +275,9 @@ end
 local function setup_text(name)
     windower.text.create(name)
     windower.text.set_bg_visibility(name, false)
-    windower.text.set_stroke_width(name, 1)
-    windower.text.set_stroke_color(name, 200, 0, 0, 0)
+    -- No outline: every label sits on a solid key/board background, and an
+    -- outline on small text is what makes it look grainy.
+    windower.text.set_stroke_width(name, 0)
     windower.text.set_color(name, 255, 230, 230, 230)
 end
 
@@ -464,116 +465,142 @@ local function draw_keyboard(ox, oy)
         table.sort(list, function(a, b) return bp.combo_less(a.combo, b.combo) end)
     end
     local show_pad = settings.numpad == 'on' or (settings.numpad == 'auto' and has_pad)
+    local blocks = { 'main' }
+    if has_nav then blocks[#blocks + 1] = 'nav' end
+    if show_pad then blocks[#blocks + 1] = 'pad' end
+
+    -- Width of each bound key in key units (1 = a letter key, 2 = Backspace...).
+    local key_units = {}
+    for _, row in ipairs(FULL_ROWS) do
+        for _, blk in ipairs(blocks) do
+            for _, slot in ipairs(row[blk]) do
+                if slot[1] then key_units[slot[1]] = slot[2] end
+            end
+        end
+    end
 
     local bw = max_mods + 1                         -- badge column, in characters
     local size = settings.display.text.size
     local cw0, lh0 = metrics.cw, metrics.lh
     local cw, lh = cw0, lh0
-    local blocks = { 'main' }
-    if has_nav then blocks[#blocks + 1] = 'nav' end
-    if show_pad then blocks[#blocks + 1] = 'pad' end
 
-    -- Label column, in characters: fixed by //bh keywidth, or automatically the
-    -- smallest width (up to 10) that fits every label in two lines.
+    -- Label column of a 1u key, in characters: fixed by //bh keywidth, or chosen
+    -- automatically below (between 7 and 12).
     local auto_w = (tonumber(settings.key_width) or 0) <= 0
-    local w = auto_w and bp.pick_width(labels, 7, 10, 2) or tonumber(settings.key_width)
+    local w = auto_w and 12 or tonumber(settings.key_width)
 
-    -- Board size in pixels for the current label width and text size.
+    local function unit_px() return (bw + w) * cw + 2 * KEY_PAD_X end
+    local function kw(u) return u * (unit_px() + GAP) - GAP end
+    -- Label characters that fit on a key of u units (wide keys get more).
+    local function chars_for(u)
+        return math.max(w, math.floor((kw(u) - 2 * KEY_PAD_X) / cw + 0.01) - bw)
+    end
+    -- Lines of text a bound key needs at its own width.
+    local function key_lines(k)
+        local n, chars = 1, chars_for(key_units[k] or 1)
+        for _, b in ipairs(by_key[k]) do n = n + #bp.wrap(b.text, chars) end
+        return n
+    end
+    -- Rows with binds all share one height (the busiest key's); rows with no
+    -- binds at all stay slim. Two heights keeps the board tidy and compact.
+    local row_has_binds = {}
+    for i, row in ipairs(FULL_ROWS) do
+        for _, blk in ipairs(blocks) do
+            for _, slot in ipairs(row[blk]) do
+                if slot[1] and by_key[slot[1]] then row_has_binds[i] = true end
+            end
+        end
+    end
+    local function full_lines()
+        local lines = 1
+        for k in pairs(by_key) do
+            if key_units[k] then lines = math.max(lines, key_lines(k)) end
+        end
+        return lines
+    end
+    local function row_height(i, full)
+        return (row_has_binds[i] and full or 1) * lh + 2 * KEY_PAD_Y
+    end
     local function board_size()
-        local unit = (bw + w) * cw + 2 * KEY_PAD_X
+        local unit = unit_px()
         local units = 15 + (has_nav and 3 or 0) + (show_pad and 4 or 0)
         local width = units * (unit + GAP) - #blocks * GAP + (#blocks - 1) * unit * 0.35
-        local height = 0
-        for _, row in ipairs(FULL_ROWS) do
-            local lines = 1
-            for _, blk in ipairs(blocks) do
-                for _, slot in ipairs(row[blk]) do
-                    local k = slot[1]
-                    if k and by_key[k] then
-                        local n = 1
-                        for _, b in ipairs(by_key[k]) do n = n + #bp.wrap(b.text, w) end
-                        lines = math.max(lines, n)
-                    end
-                end
-            end
-            height = height + lines * lh + 2 * KEY_PAD_Y + GAP + (row.gap_after and 6 or 0)
-        end
+        local full, height = full_lines(), 6
+        for i in ipairs(FULL_ROWS) do height = height + row_height(i, full) + GAP end
         return width, height
     end
 
-    -- Fit the board into a share of the screen (//bh fit, default 50%): first
-    -- narrow the labels (not below 7 characters), then step the text size down.
+    -- Fit the board into a share of the screen (//bh fit, default 50%). Try text
+    -- sizes from the largest down; at each size use the widest labels (least
+    -- wrapping) that still fit. Biggest readable text wins.
     local sw, sh = screen_size()
     local fit = (tonumber(settings.fit) or 0) / 100
     if fit > 0 then
         local avail_w = math.min(sw * fit, sw - ox - 12)
         local avail_h = sh * fit
-        for _ = 1, 40 do
-            local bwid, bhgt = board_size()
-            if bwid <= avail_w and bhgt <= avail_h then break end
-            if bwid > avail_w and auto_w and w > 7 then
-                w = w - 1
-            elseif (draw_size or size) > 6 then
-                draw_size = (draw_size or size) - 1
-                cw, lh = cw0 * draw_size / size, lh0 * draw_size / size
-            else
-                break
+        -- Pass 1 keeps labels at 9-12 characters (words rarely split); only if
+        -- nothing fits does pass 2 allow 7-8.
+        local passes = auto_w and { { 12, 9 }, { 8, 7 } } or { { w, w } }
+        local found = false
+        for _, range in ipairs(passes) do
+            for s = size, 6, -1 do
+                cw, lh = cw0 * s / size, lh0 * s / size
+                for lw = range[1], range[2], -1 do
+                    w = lw
+                    local bwid, bhgt = board_size()
+                    if bwid <= avail_w and bhgt <= avail_h then found = true break end
+                end
+                if found then
+                    if s < size then draw_size = s end
+                    break
+                end
             end
+            if found then break end
+        end
+        if not found then
+            -- Nothing fits: use the smallest layout.
+            draw_size = math.min(size, 6)
+            cw, lh = cw0 * draw_size / size, lh0 * draw_size / size
+            if auto_w then w = 7 end
         end
     end
     state.too_wide = (board_size()) > sw - ox - 12
 
-    local unit = (bw + w) * cw + 2 * KEY_PAD_X      -- width of a 1u key in pixels
-    local function kw(u) return u * (unit + GAP) - GAP end
+    local unit = unit_px()
     local block_gap = unit * 0.35
+    local full = full_lines()
 
-    -- Text for each bound key, and the number of lines it needs.
+    -- Text for a bound key, wrapped to that key's own width.
     local function key_text(k)
-        local list = by_key[k]
+        local chars = chars_for(key_units[k] or 1)
         local lit = false
         local out = { color(cap_label(k), COLORS.cap) }
-        for _, b in ipairs(list) do
+        for _, b in ipairs(by_key[k]) do
             local dim = layer ~= '' and b.combo ~= layer
             if layer ~= '' and b.combo == layer then lit = true end
             local c = dim and COLORS.dim or COLORS[b.cat] or COLORS.command
-            for i, line in ipairs(bp.wrap(b.text, w)) do
+            for i, line in ipairs(bp.wrap(b.text, chars)) do
                 local lead = i == 1 and badge(b.combo, bw, dim) or (' '):rep(bw)
                 out[#out + 1] = lead .. color(line, c)
             end
         end
-        return table.concat(out, '\n'), #out, lit
+        return table.concat(out, '\n'), lit
     end
 
-    -- Pass 1: row heights (every key in a keyboard row shares one height).
-    local rows = {}
-    for i, row in ipairs(FULL_ROWS) do
-        local lines = 1
-        for _, blk in ipairs(blocks) do
-            for _, slot in ipairs(row[blk]) do
-                local k = slot[1]
-                if k and by_key[k] then
-                    local _, n = key_text(k)
-                    lines = math.max(lines, n)
-                end
-            end
-        end
-        rows[i] = { h = lines * lh + 2 * KEY_PAD_Y, gap_after = row.gap_after }
-    end
-
-    -- Block x offsets.
+    -- Block x offsets and board size.
     local x_of = { main = ox }
     local x = ox + kw(15) + block_gap
     if has_nav then x_of.nav = x; x = x + kw(3) + block_gap end
     if show_pad then x_of.pad = x; x = x + kw(4) + block_gap end
     local total_w = x - block_gap - ox
-    local total_h = 0
-    for _, r in ipairs(rows) do total_h = total_h + r.h + GAP + (r.gap_after and 6 or 0) end
+    local total_h = 6
+    for i in ipairs(FULL_ROWS) do total_h = total_h + row_height(i, full) + GAP end
 
     -- Board background, then keys.
     rect(ox - 6, oy - 4, total_w + 12, total_h + 8, { 8, 10, 14 }, 200)
     local y = oy
     for i, row in ipairs(FULL_ROWS) do
-        local h = rows[i].h
+        local row_h = row_height(i, full)
         for _, blk in ipairs(blocks) do
             local kx = x_of[blk]
             for _, slot in ipairs(row[blk]) do
@@ -582,20 +609,20 @@ local function draw_keyboard(ox, oy)
                 if k and k:sub(1, 1) == '@' then
                     local m = k:sub(2)
                     local on = state.combo ~= '' and state.combo:find(m, 1, true) ~= nil
-                    rect(kx, y, width, h, on and { 50, 120, 60 } or { 30, 33, 40 }, on and 235 or 140)
+                    rect(kx, y, width, row_h, on and { 50, 120, 60 } or { 30, 33, 40 }, on and 235 or 140)
                     label(kx + KEY_PAD_X, y + KEY_PAD_Y, color(MOD_NAMES[m] or m, on and COLORS.active or COLORS.cap_dim))
                 elseif k and by_key[k] then
-                    local str, _, lit = key_text(k)
-                    rect(kx, y, width, h, lit and { 38, 82, 48 } or { 48, 55, 70 }, 230)
+                    local str, lit = key_text(k)
+                    rect(kx, y, width, row_h, lit and { 38, 82, 48 } or { 48, 55, 70 }, 230)
                     label(kx + KEY_PAD_X, y + KEY_PAD_Y, str)
                 elseif k then
-                    rect(kx, y, width, h, { 36, 40, 48 }, 120)
+                    rect(kx, y, width, row_h, { 36, 40, 48 }, 120)
                     label(kx + KEY_PAD_X, y + KEY_PAD_Y, color(cap_label(k), COLORS.cap_dim))
                 end
                 kx = kx + width + GAP
             end
         end
-        y = y + h + GAP + (rows[i].gap_after and 6 or 0)
+        y = y + row_h + GAP + (row.gap_after and 6 or 0)
     end
 end
 
