@@ -101,7 +101,7 @@ function M.key_less(a, b)
 end
 
 -------------------------------------------------------------------------------
--- Command -> short label, kind ('action' | 'gs' | 'other')
+-- Command -> readable label + category
 -------------------------------------------------------------------------------
 local ACTION_VERBS = {
     ma = true, magic = true, ja = true, jobability = true, ws = true, weaponskill = true,
@@ -116,44 +116,93 @@ local function split_words(s)
     return w
 end
 
-function M.label(cmd)
+-- "PhysicalDefenseMode" -> "Physical Defense": drop a trailing "Mode" and put
+-- spaces at CamelCase boundaries so labels can wrap between words.
+local function readable(name)
+    if #name > 6 then name = name:gsub('[Mm]ode$', '') end
+    return (name:gsub('(%l)(%u)', '%1 %2'))
+end
+
+local SPELL_VERBS = { ma = true, magic = true, song = true, so = true, ninjutsu = true, nin = true }
+
+-- Command -> readable label and a category used for colour:
+-- 'spell' | 'ability' (JA/WS/items/pet) | 'toggle' | 'cycle' | 'set' | 'other'
+function M.describe(cmd)
     local c = trim(cmd)
 
     -- input /ma "Cure IV" <t>   |   /ja Provoke <t>
     local slash = c:match('^input%s+(/.*)$') or c:match('^(/.*)$')
     if slash then
         local verb, args = slash:match('^/(%S+)%s*(.*)$')
-        if verb and (verb:lower() == 'target' or verb:lower() == 'ta') and args ~= '' then
-            return 'Target ' .. args, 'action'
+        verb = verb and verb:lower()
+        if (verb == 'target' or verb == 'ta') and args ~= '' then
+            return 'Target ' .. args, 'ability'
         end
-        if verb and ACTION_VERBS[verb:lower()] then
+        if verb and ACTION_VERBS[verb] then
             local name = args:match('^"([^"]+)"') or args:match("^'([^']+)'") or args:match('^(%S+)')
-            if name then return name, 'action' end
+            if name then return name, SPELL_VERBS[verb] and 'spell' or 'ability' end
         end
         return slash, 'other'
     end
 
-    -- gs c cycle OffenseMode / gs c toggle AutoCaress / gs c set X Y
+    -- gs c cycle OffenseMode / gs c toggle AutoCaress / gs c set DefenseMode Physical
     local gsc = c:match('^gs%s+c%s+(.+)$') or c:match('^gearswap%s+c%s+(.+)$')
     if gsc then
         local w = split_words(gsc)
-        -- "AutoStunMode" -> "AutoStun" keeps labels short.
-        if w[2] and #w[2] > 6 then w[2] = w[2]:gsub('[Mm]ode$', '') end
         local verb = (w[1] or ''):lower()
-        local label = gsc
-        if verb == 'cycle' and w[2] then label = 'Cyc ' .. w[2]
-        elseif verb == 'cycleback' and w[2] then label = 'Cyc< ' .. w[2]
-        elseif verb == 'toggle' and w[2] then label = 'Tog ' .. w[2]
-        elseif verb == 'set' and w[2] and w[3] then label = w[2] .. '=' .. table.concat(w, ' ', 3)
-        elseif verb == 'reset' and w[2] then label = 'Reset ' .. w[2]
-        end
-        return label, 'gs'
+        if (verb == 'cycle' or verb == 'cycleback') and w[2] then return readable(w[2]), 'cycle' end
+        if verb == 'toggle' and w[2] then return readable(w[2]), 'toggle' end
+        if verb == 'set' and w[2] and w[3] then return readable(w[2]) .. ': ' .. table.concat(w, ' ', 3), 'set' end
+        if verb == 'reset' and w[2] then return readable(w[2]) .. ': off', 'set' end
+        return gsc, 'other'
     end
 
     local set = c:match('^gs%s+equip%s+(%S+)')
-    if set then return 'Equip ' .. set:gsub('^sets%.', ''), 'gs' end
+    if set then return 'Equip ' .. set:gsub('^sets%.', ''), 'other' end
 
     return c, 'other'
+end
+
+-- Word-wrap text into lines of at most `width` characters. Words are never
+-- split unless a single word is longer than the width, in which case it is
+-- broken with a hyphen.
+function M.wrap(text, width)
+    local lines, cur = {}, ''
+    for word in text:gmatch('%S+') do
+        while #word > width do
+            if cur ~= '' then lines[#lines + 1] = cur; cur = '' end
+            lines[#lines + 1] = word:sub(1, width - 1) .. '-'
+            word = word:sub(width)
+        end
+        if cur == '' then
+            cur = word
+        elseif #cur + 1 + #word <= width then
+            cur = cur .. ' ' .. word
+        else
+            lines[#lines + 1] = cur
+            cur = word
+        end
+    end
+    if cur ~= '' then lines[#lines + 1] = cur end
+    return lines
+end
+
+-- Smallest label width (between lo and hi) at which every label fits in
+-- max_lines lines without splitting a word. Falls back to hi (with hyphens).
+function M.pick_width(labels, lo, hi, max_lines)
+    for w = lo, hi do
+        local ok = true
+        for _, t in ipairs(labels) do
+            local lines = M.wrap(t, w)
+            if #lines > max_lines then ok = false break end
+            for _, l in ipairs(lines) do
+                if l:sub(-1) == '-' and #l == w then ok = false break end
+            end
+            if not ok then break end
+        end
+        if ok then return w end
+    end
+    return hi
 end
 
 -------------------------------------------------------------------------------

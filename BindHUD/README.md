@@ -1,14 +1,23 @@
 # BindHUD
 
-A Windower 4 addon that shows your keyboard binds as an on-screen grid, so you can see which keys and modifiers trigger each bind.
+A Windower 4 addon that shows your keyboard binds on screen, so you can see which key and modifier trigger each spell, ability or toggle.
 
-It is display-only. It never sends packets, never runs commands, never types into chat or writes to the chat log, and never blocks keys. Command replies (e.g. `//bh files`) go to the Windower console. It reads your files, draws a text box, and watches the Ctrl/Alt/Shift/Win keys to highlight the layer you are holding.
+It is display-only. It never sends packets, never runs commands, never types into chat or writes to the chat log, and never blocks keys. Command replies (e.g. `//bh files`) go to the Windower console. It reads your files, draws the overlay, and watches the Ctrl/Alt/Shift/Win keys to highlight the layer you are holding.
+
+## Views
+
+Switch with `//bh view`.
+
+- **Keyboard** (default): a full keyboard with every key in its real position. Each bound key lists all of its binds. The coloured letter in front of each bind is the modifier to hold: **C** Ctrl, **A** Alt, **S** Shift, **W** Win, **-** none. Holding a modifier lights up the keys for that layer and dims the other binds. The Ins/Del/arrow block appears when you have binds there, and the numpad when a numpad key is bound (see `//bh numpad`).
+- **Cheat sheet**: every action grouped into spells, abilities, toggles, cycles, modes and other, in alphabetical order, with the keys to press. Use it when you know the spell's name but not its key.
+
+Label colours: spell (blue), ability / weapon skill (gold), toggle (orange), cycle (violet), mode (teal), other (grey).
 
 ## Install
 
 1. Copy this `BindHUD` folder to `Windower4/addons/BindHUD/`.
 2. In game: `//lua load bindhud`
-3. To load it every time, add `lua load bindhud` to `Windower4/scripts/init.txt`, near the top of the addon list (before addons like GearInfo), so it receives mouse events for dragging.
+3. To load it every time, add `lua load bindhud` to `Windower4/scripts/init.txt`.
 
 ## What it reads
 
@@ -28,18 +37,15 @@ Commented-out binds are ignored. If the same key and modifiers are bound twice, 
 | Command | What it does |
 |---|---|
 | `//bh` | Show or hide the overlay |
+| `//bh view` | Switch between the keyboard and the cheat sheet (or `//bh view keyboard`, `//bh view cheatsheet`) |
+| `//bh peek` | Switch between always shown (default) and peek, where it only appears while you hold a modifier |
+| `//bh size 10` | Text size; the keys resize to fit |
+| `//bh keywidth 8` | Label characters per key. Smaller makes the keyboard narrower (long words break with a hyphen). `//bh keywidth auto` to reset |
+| `//bh numpad auto` | Numpad block: `auto` shows it only when a numpad key is bound, `on` always, `off` never |
+| `//bh pos 50 400` | Move the overlay to a screen position |
 | `//bh rescan` | Re-read your files after you edit binds |
-| `//bh mode always` | Always show the full grid; the layer you hold lights up green |
-| `//bh mode hold` | Show a short list: your plain keys when nothing is held, then only the layer you hold, plus dimmed hints for binds that need one more modifier |
-| `//bh size 10` | Font size |
-| `//bh width 14` | Longest label before it is cut off |
 | `//bh files` | List the files that were read and how many binds each had |
-| `//bh pos 50 400` | Move the box to a screen position (pixels from the top-left) |
 
-Drag the box to move it. The position is saved when you let go.
+Drag the title bar to move the overlay. The position is saved when you let go.
 
-**If the box won't drag:** another addon loaded before BindHUD may be claiming mouse events, and Windower doesn't pass a claimed event on to addons loaded later. Load BindHUD earlier in `scripts/init.txt` (for example right after `lua load skillchains`) instead of loading it by hand. Or place it with `//bh pos <x> <y>`.
-
-In `data/settings.xml`: set `hold_idle` to `hide` to hide the box in hold mode while nothing is held, and `show_next` to `false` to turn off the dimmed hints.
-
-Tip: bind a key to toggle it, e.g. in init.txt: `bind ^h bh`.
+Tip: bind a key to show and hide it, e.g. in init.txt: `bind ^h bh`.
