@@ -31,6 +31,7 @@ local defaults = {
     peek_delay = 0.25,         -- seconds a modifier must be held before peek shows
     numpad = 'auto',           -- 'auto' (only when a numpad key is bound) | 'on' | 'off'
     key_width = 0,             -- label characters per key; 0 = automatic (up to 10)
+    fit = 50,                  -- keep the keyboard within this % of the screen's width and height; 0 = off
     include_init = true,       -- read scripts/init.txt
     follow_includes = true,    -- follow include() in GearSwap files
     extra_files = '',          -- comma separated, {name} and {job} are substituted
@@ -467,37 +468,62 @@ local function draw_keyboard(ox, oy)
     local show_pad = settings.numpad == 'on' or (settings.numpad == 'auto' and has_pad)
 
     local bw = max_mods + 1                         -- badge column, in characters
-    local cw, lh = metrics.cw, metrics.lh
+    local size = settings.display.text.size
+    local cw0, lh0 = metrics.cw, metrics.lh
+    local cw, lh = cw0, lh0
+    local blocks = { 'main' }
+    if has_nav then blocks[#blocks + 1] = 'nav' end
+    if show_pad then blocks[#blocks + 1] = 'pad' end
 
-    -- Board width for a given label width (in characters).
-    local function board_width(lw)
-        local unit = (bw + lw) * cw + 2 * KEY_PAD_X
-        local units, blocks_n = 15, 1
-        if has_nav then units, blocks_n = units + 3, blocks_n + 1 end
-        if show_pad then units, blocks_n = units + 4, blocks_n + 1 end
-        return units * (unit + GAP) - blocks_n * GAP + (blocks_n - 1) * unit * 0.35
+    -- Label column, in characters: fixed by //bh keywidth, or automatically the
+    -- smallest width (up to 10) that fits every label in two lines.
+    local auto_w = (tonumber(settings.key_width) or 0) <= 0
+    local w = auto_w and bp.pick_width(labels, 7, 10, 2) or tonumber(settings.key_width)
+
+    -- Board size in pixels for the current label width and text size.
+    local function board_size()
+        local unit = (bw + w) * cw + 2 * KEY_PAD_X
+        local units = 15 + (has_nav and 3 or 0) + (show_pad and 4 or 0)
+        local width = units * (unit + GAP) - #blocks * GAP + (#blocks - 1) * unit * 0.35
+        local height = 0
+        for _, row in ipairs(FULL_ROWS) do
+            local lines = 1
+            for _, blk in ipairs(blocks) do
+                for _, slot in ipairs(row[blk]) do
+                    local k = slot[1]
+                    if k and by_key[k] then
+                        local n = 1
+                        for _, b in ipairs(by_key[k]) do n = n + #bp.wrap(b.text, w) end
+                        lines = math.max(lines, n)
+                    end
+                end
+            end
+            height = height + lines * lh + 2 * KEY_PAD_Y + GAP + (row.gap_after and 6 or 0)
+        end
+        return width, height
     end
 
-    -- Label column, in characters: fixed by //bh keywidth, or automatic: the
-    -- smallest width (up to 10) that fits every label in two lines, narrowed
-    -- further if needed so the whole board fits on this screen.
-    local w
-    if (tonumber(settings.key_width) or 0) > 0 then
-        w = tonumber(settings.key_width)
-    else
-        w = bp.pick_width(labels, 7, 10, 2)
-        local avail = screen_size() - ox - 12
-        -- First narrow the labels (not below 7 characters, which stays readable)...
-        while w > 7 and board_width(w) > avail do w = w - 1 end
-        -- ...then, on small screens, draw the keyboard text a little smaller.
-        local size = settings.display.text.size
-        local cw0, lh0 = cw, lh
-        while board_width(w) > avail and (draw_size or size) > 6 do
-            draw_size = (draw_size or size) - 1
-            cw, lh = cw0 * draw_size / size, lh0 * draw_size / size
+    -- Fit the board into a share of the screen (//bh fit, default 50%): first
+    -- narrow the labels (not below 7 characters), then step the text size down.
+    local sw, sh = screen_size()
+    local fit = (tonumber(settings.fit) or 0) / 100
+    if fit > 0 then
+        local avail_w = math.min(sw * fit, sw - ox - 12)
+        local avail_h = sh * fit
+        for _ = 1, 40 do
+            local bwid, bhgt = board_size()
+            if bwid <= avail_w and bhgt <= avail_h then break end
+            if bwid > avail_w and auto_w and w > 7 then
+                w = w - 1
+            elseif (draw_size or size) > 6 then
+                draw_size = (draw_size or size) - 1
+                cw, lh = cw0 * draw_size / size, lh0 * draw_size / size
+            else
+                break
+            end
         end
     end
-    state.too_wide = board_width(w) > screen_size() - ox - 12
+    state.too_wide = (board_size()) > sw - ox - 12
 
     local unit = (bw + w) * cw + 2 * KEY_PAD_X      -- width of a 1u key in pixels
     local function kw(u) return u * (unit + GAP) - GAP end
@@ -521,9 +547,6 @@ local function draw_keyboard(ox, oy)
     end
 
     -- Pass 1: row heights (every key in a keyboard row shares one height).
-    local blocks = { 'main' }
-    if has_nav then blocks[#blocks + 1] = 'nav' end
-    if show_pad then blocks[#blocks + 1] = 'pad' end
     local rows = {}
     for i, row in ipairs(FULL_ROWS) do
         local lines = 1
@@ -831,6 +854,7 @@ local HELP = {
     '//bh view            switch between keyboard and cheat sheet',
     '//bh peek            switch between always shown and peek (only while holding a modifier)',
     '//bh size <n>        text size (keys resize to fit)',
+    '//bh fit <percent>|off    largest share of the screen the keyboard may use (default 50)',
     '//bh keywidth <n>|auto    label characters per key (smaller = narrower keyboard)',
     '//bh numpad auto|on|off   numpad block: only when bound (auto), always, or never',
     '//bh pos <x> <y>     move the overlay (or drag its title bar)',
@@ -875,6 +899,9 @@ windower.register_event('addon command', function(cmd, ...)
         box:size(n)
     elseif cmd == 'numpad' and (arg == 'auto' or arg == 'on' or arg == 'off') then
         settings.numpad = arg
+    elseif cmd == 'fit' and (arg == 'off' or tonumber(args[1])) then
+        settings.fit = arg == 'off' and 0 or math.max(20, math.min(100, math.floor(tonumber(args[1]))))
+        msg(settings.fit > 0 and ('Keyboard fits within ' .. settings.fit .. '% of the screen.') or 'Fit off: //bh size sets the size.')
     elseif cmd == 'keywidth' and (arg == 'auto' or tonumber(args[1])) then
         settings.key_width = arg == 'auto' and 0 or math.max(5, math.min(20, math.floor(tonumber(args[1]))))
     elseif cmd == 'pos' and tonumber(args[1]) and tonumber(args[2]) then

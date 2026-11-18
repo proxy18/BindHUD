@@ -13,7 +13,7 @@ Switch with `//bh view`.
 
 Label colours: spell (blue), ability / weapon skill (gold), toggle (orange), cycle (violet), mode (teal), other (grey).
 
-**Fits any screen.** Key sizes are measured from the font in game, and both views fit themselves to your screen's UI resolution. On a smaller screen the keyboard narrows its labels and then its text, and the cheat sheet uses fewer columns. If you set `//bh keywidth` yourself, your setting is used as-is.
+**Fits any screen.** Key sizes are measured from the font in game, and both views fit themselves to your screen's UI resolution. By default the keyboard keeps within half your screen's width and height (`//bh fit`): it narrows its labels and then steps its text down, stopping at text size 6 so it stays readable. On a small screen it can therefore stay larger than the limit. The cheat sheet uses fewer columns on narrow screens. If you set `//bh keywidth` yourself, your setting is used as-is.
 
 ## Install
 
@@ -42,6 +42,7 @@ Commented-out binds are ignored. If the same key and modifiers are bound twice, 
 | `//bh view` | Switch between the keyboard and the cheat sheet (or `//bh view keyboard`, `//bh view cheatsheet`) |
 | `//bh peek` | Switch between always shown (default) and peek, where it only appears while you hold a modifier |
 | `//bh size 10` | Text size; the keys resize to fit |
+| `//bh fit 50` | Keep the keyboard within this percentage of your screen's width and height (default 50). `//bh fit off` turns it off so `//bh size` alone sets the size |
 | `//bh keywidth 8` | Label characters per key. Smaller makes the keyboard narrower (long words break with a hyphen). `//bh keywidth auto` to reset |
 | `//bh numpad auto` | Numpad block: `auto` shows it only when a numpad key is bound, `on` always, `off` never |
 | `//bh pos 50 400` | Move the overlay to a screen position |
