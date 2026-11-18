@@ -828,8 +828,26 @@ local MOD_DIK = {
 }
 local held_dik = {}
 local peek_token = 0
+local DIK_TAB, DIK_ESC = 0x0F, 0x01
+
+-- Forget every held modifier. Used when the game loses focus: Windows then
+-- swallows the key releases, so without this Alt looks stuck after Alt+Tab.
+local function clear_mods()
+    if next(held_dik) == nil and state.combo == '' then return end
+    held_dik = {}
+    state.combo = ''
+    state.peek_ready = false
+    peek_token = peek_token + 1
+    render()
+end
 
 windower.register_event('keyboard', function(dik, pressed)
+    -- Alt+Tab / Alt+Esc switch away from the game: the Alt release will never
+    -- arrive, so drop the modifiers now.
+    if pressed and (dik == DIK_TAB or dik == DIK_ESC) and (held_dik[0x38] or held_dik[0xB8]) then
+        clear_mods()
+        return
+    end
     local m = MOD_DIK[dik]
     if not m then return end
     if (held_dik[dik] == true) == (pressed == true) then return end
@@ -858,6 +876,19 @@ windower.register_event('keyboard', function(dik, pressed)
     end
     render()
 end)
+
+-- Backup for other ways of leaving the game (Win key, clicking another window):
+-- if this Windower build can report window focus, clear held modifiers when the
+-- game loses it. Checked a few times a second, not every frame.
+if type(windower.has_focus) == 'function' then
+    local last_check = 0
+    windower.register_event('prerender', function()
+        local now = os.clock()
+        if now - last_check < 0.25 then return end
+        last_check = now
+        if next(held_dik) ~= nil and not windower.has_focus() then clear_mods() end
+    end)
+end
 
 -------------------------------------------------------------------------------
 -- Lifecycle
