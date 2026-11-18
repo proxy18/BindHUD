@@ -30,8 +30,10 @@ local defaults = {
     peek = false,              -- false: always shown; true: only while a modifier is held
     peek_delay = 0.25,         -- seconds a modifier must be held before peek shows
     numpad = 'auto',           -- 'auto' (only when a numpad key is bound) | 'on' | 'off'
-    key_width = 0,             -- label characters per key; 0 = automatic (up to 10)
-    fit = 50,                  -- keep the keyboard within this % of the screen's width and height; 0 = off
+    key_width = 0,             -- label characters per key; 0 = automatic
+    fit_width = 65,            -- keep the keyboard within this % of the screen width; 0 = no fitting
+    fit_height = 45,           -- ...and this % of the screen height
+    show_targets = false,      -- show targeting binds (/ta, /target), e.g. alliance targeting on F1-F6
     include_init = true,       -- read scripts/init.txt
     follow_includes = true,    -- follow include() in GearSwap files
     extra_files = '',          -- comma separated, {name} and {job} are substituted
@@ -57,6 +59,7 @@ local COLORS = {
     title   = { 255, 215, 120 },
     cap     = { 150, 200, 255 },
     cap_dim = { 95, 105, 125 },
+    key_name = { 255, 255, 255 },
     dim     = { 95, 100, 110 },
     active  = { 120, 255, 120 },
     group   = { 170, 175, 190 },
@@ -255,7 +258,9 @@ local used = { prim = {}, text = {} }   -- names drawn in the current frame
 local next_id = 0
 
 local function cs(c) return ('\\cs(%d,%d,%d)'):format(c[1], c[2], c[3]) end
-local function color(s, c) return cs(c) .. s .. '\\cr' end
+-- Windower treats "\" as the start of a colour code, so a literal backslash
+-- (the \ key, or one inside a command) has to be doubled.
+local function color(s, c) return cs(c) .. s:gsub('\\', '\\\\') .. '\\cr' end
 local function px(v) return math.floor(v + 0.5) end
 
 local function rect(x, y, w, h, c, alpha)
@@ -281,7 +286,7 @@ local function setup_text(name)
     windower.text.set_color(name, 255, 230, 230, 230)
 end
 
-local function label(x, y, str)
+local function label(x, y, str, bold)
     next_id = next_id + 1
     local name = PREFIX .. 't' .. next_id
     if not pool.text[name] then
@@ -290,6 +295,7 @@ local function label(x, y, str)
     end
     windower.text.set_font(name, settings.display.text.font)
     windower.text.set_font_size(name, draw_size or settings.display.text.size)
+    windower.text.set_bold(name, bold == true)
     windower.text.set_location(name, px(x), px(y))
     windower.text.set_text(name, str)
     windower.text.set_visibility(name, true)
@@ -422,12 +428,20 @@ local function badge(combo, width, dim)
     return s .. (' '):rep(math.max(0, width - n))
 end
 
--- All binds as a list with readable label + category, sorted by modifiers.
+-- Targeting binds (/ta, /target), e.g. alliance targeting on Ctrl/Alt+F1-F6.
+local function is_targeting(cmd)
+    local c = cmd:lower()
+    return c:match('^input%s+/ta%s') or c:match('^input%s+/target%s') or c:match('^/ta%s') or c:match('^/target%s')
+end
+
+-- All binds to show, each with a readable label + category.
 local function bind_list()
     local list = {}
     for _, b in pairs(state.binds) do
-        if not b.text then b.text, b.cat = bp.describe(b.command) end
-        list[#list + 1] = b
+        if settings.show_targets or not is_targeting(b.command) then
+            if not b.text then b.text, b.cat = bp.describe(b.command) end
+            list[#list + 1] = b
+        end
     end
     return list
 end
@@ -479,25 +493,37 @@ local function draw_keyboard(ox, oy)
         end
     end
 
-    local bw = max_mods + 1                         -- badge column, in characters
+    -- Modifier-letter column. Each key only reserves what its own binds need
+    -- ("C " = 2 characters, "CAW " = 4), so most keys keep more room for labels.
+    -- A 1u key's width is based on the common 2-character case.
+    local BASE_BW = 2
+    local key_bw = {}
+    for k, list in pairs(by_key) do
+        local n = 1
+        for _, b in ipairs(list) do n = math.max(n, #mods_of(b.combo)) end
+        key_bw[k] = n + 1
+    end
+
     local size = settings.display.text.size
     local cw0, lh0 = metrics.cw, metrics.lh
     local cw, lh = cw0, lh0
 
-    -- Label column of a 1u key, in characters: fixed by //bh keywidth, or chosen
-    -- automatically below (between 7 and 12).
+    -- Label characters on a 1u key: fixed by //bh keywidth, or chosen below.
+    local longest = 6
+    for _, t in ipairs(labels) do longest = math.max(longest, #t) end
     local auto_w = (tonumber(settings.key_width) or 0) <= 0
-    local w = auto_w and 12 or tonumber(settings.key_width)
+    local w = auto_w and math.min(20, longest) or tonumber(settings.key_width)
 
-    local function unit_px() return (bw + w) * cw + 2 * KEY_PAD_X end
+    local function unit_px() return (BASE_BW + w) * cw + 2 * KEY_PAD_X end
     local function kw(u) return u * (unit_px() + GAP) - GAP end
-    -- Label characters that fit on a key of u units (wide keys get more).
-    local function chars_for(u)
-        return math.max(w, math.floor((kw(u) - 2 * KEY_PAD_X) / cw + 0.01) - bw)
+    -- Label characters that fit on key k at its own width (wide keys get more).
+    local function chars_for(k)
+        local u = key_units[k] or 1
+        return math.max(4, math.floor((kw(u) - 2 * KEY_PAD_X) / cw + 0.01) - (key_bw[k] or BASE_BW))
     end
-    -- Lines of text a bound key needs at its own width.
+    -- Lines a bound key needs: its name, then each bind at the key's own width.
     local function key_lines(k)
-        local n, chars = 1, chars_for(key_units[k] or 1)
+        local n, chars = 1, chars_for(k)
         for _, b in ipairs(by_key[k]) do n = n + #bp.wrap(b.text, chars) end
         return n
     end
@@ -519,7 +545,7 @@ local function draw_keyboard(ox, oy)
         return lines
     end
     local function row_height(i, full)
-        return (row_has_binds[i] and full or 1) * lh + 2 * KEY_PAD_Y
+        return (row_has_binds[i] and full or 1) * lh + 2 * KEY_PAD_Y + (row_has_binds[i] and KEY_PAD_Y or 0)
     end
     local function board_size()
         local unit = unit_px()
@@ -530,17 +556,19 @@ local function draw_keyboard(ox, oy)
         return width, height
     end
 
-    -- Fit the board into a share of the screen (//bh fit, default 50%). Try text
-    -- sizes from the largest down; at each size use the widest labels (least
-    -- wrapping) that still fit. Biggest readable text wins.
+    -- Fit the board into a share of the screen (//bh fit; default 65% wide,
+    -- 45% tall). Try text sizes from the largest down; at each size use the
+    -- widest keys that fit, since wider keys wrap less and so need less height.
     local sw, sh = screen_size()
-    local fit = (tonumber(settings.fit) or 0) / 100
-    if fit > 0 then
-        local avail_w = math.min(sw * fit, sw - ox - 12)
-        local avail_h = sh * fit
-        -- Pass 1 keeps labels at 9-12 characters (words rarely split); only if
+    local fit_w = (tonumber(settings.fit_width) or 0) / 100
+    local fit_h = (tonumber(settings.fit_height) or 0) / 100
+    if fit_w > 0 then
+        local avail_w = math.min(sw * fit_w, sw - ox - 12)
+        local avail_h = fit_h > 0 and sh * fit_h or sh
+        -- Pass 1 keeps labels at 9+ characters (words rarely split); only if
         -- nothing fits does pass 2 allow 7-8.
-        local passes = auto_w and { { 12, 9 }, { 8, 7 } } or { { w, w } }
+        local top = math.min(20, longest)
+        local passes = auto_w and { { top, math.min(top, 9) }, { 8, 7 } } or { { w, w } }
         local found = false
         for _, range in ipairs(passes) do
             for s = size, 6, -1 do
@@ -569,18 +597,19 @@ local function draw_keyboard(ox, oy)
     local unit = unit_px()
     local block_gap = unit * 0.35
     local full = full_lines()
+    local cap_h = lh + 2 * KEY_PAD_Y      -- height of the key-name strip
 
-    -- Text for a bound key, wrapped to that key's own width.
-    local function key_text(k)
-        local chars = chars_for(key_units[k] or 1)
+    -- The binds on key k (below its name), wrapped to the key's own width.
+    local function key_body(k)
+        local chars, bwk = chars_for(k), key_bw[k] or BASE_BW
         local lit = false
-        local out = { color(cap_label(k), COLORS.cap) }
+        local out = {}
         for _, b in ipairs(by_key[k]) do
             local dim = layer ~= '' and b.combo ~= layer
             if layer ~= '' and b.combo == layer then lit = true end
             local c = dim and COLORS.dim or COLORS[b.cat] or COLORS.command
             for i, line in ipairs(bp.wrap(b.text, chars)) do
-                local lead = i == 1 and badge(b.combo, bw, dim) or (' '):rep(bw)
+                local lead = i == 1 and badge(b.combo, bwk, dim) or (' '):rep(bwk)
                 out[#out + 1] = lead .. color(line, c)
             end
         end
@@ -612,9 +641,13 @@ local function draw_keyboard(ox, oy)
                     rect(kx, y, width, row_h, on and { 50, 120, 60 } or { 30, 33, 40 }, on and 235 or 140)
                     label(kx + KEY_PAD_X, y + KEY_PAD_Y, color(MOD_NAMES[m] or m, on and COLORS.active or COLORS.cap_dim))
                 elseif k and by_key[k] then
-                    local str, lit = key_text(k)
-                    rect(kx, y, width, row_h, lit and { 38, 82, 48 } or { 48, 55, 70 }, 230)
-                    label(kx + KEY_PAD_X, y + KEY_PAD_Y, str)
+                    -- Bound key: body, a lighter strip with the key's name in
+                    -- bold, then the binds below the strip.
+                    local body, lit = key_body(k)
+                    rect(kx, y, width, row_h, lit and { 38, 82, 48 } or { 44, 50, 64 }, 230)
+                    rect(kx, y, width, cap_h, lit and { 60, 130, 75 } or { 78, 90, 115 }, 240)
+                    label(kx + KEY_PAD_X, y + KEY_PAD_Y, color(cap_label(k), COLORS.key_name), true)
+                    label(kx + KEY_PAD_X, y + cap_h + KEY_PAD_Y, body)
                 elseif k then
                     rect(kx, y, width, row_h, { 36, 40, 48 }, 120)
                     label(kx + KEY_PAD_X, y + KEY_PAD_Y, color(cap_label(k), COLORS.cap_dim))
@@ -878,7 +911,8 @@ local HELP = {
     '//bh view            switch between keyboard and cheat sheet',
     '//bh peek            switch between always shown and peek (only while holding a modifier)',
     '//bh size <n>        text size (keys resize to fit)',
-    '//bh fit <percent>|off    largest share of the screen the keyboard may use (default 50)',
+    '//bh fit <w%> [h%]|off   largest share of the screen the keyboard may use (default 65 45)',
+    '//bh targets on|off       show or hide targeting binds (/ta, /target)',
     '//bh keywidth <n>|auto    label characters per key (smaller = narrower keyboard)',
     '//bh numpad auto|on|off   numpad block: only when bound (auto), always, or never',
     '//bh pos <x> <y>     move the overlay (or drag its title bar)',
@@ -924,8 +958,20 @@ windower.register_event('addon command', function(cmd, ...)
     elseif cmd == 'numpad' and (arg == 'auto' or arg == 'on' or arg == 'off') then
         settings.numpad = arg
     elseif cmd == 'fit' and (arg == 'off' or tonumber(args[1])) then
-        settings.fit = arg == 'off' and 0 or math.max(20, math.min(100, math.floor(tonumber(args[1]))))
-        msg(settings.fit > 0 and ('Keyboard fits within ' .. settings.fit .. '% of the screen.') or 'Fit off: //bh size sets the size.')
+        if arg == 'off' then
+            settings.fit_width = 0
+            msg('Fit off: //bh size and //bh keywidth set the size.')
+        else
+            local clamp = function(v) return math.max(20, math.min(100, math.floor(v))) end
+            settings.fit_width = clamp(tonumber(args[1]))
+            if tonumber(args[2]) then settings.fit_height = clamp(tonumber(args[2])) end
+            msg(('Keyboard fits within %d%% of the screen width and %d%% of its height.'):format(settings.fit_width, settings.fit_height))
+        end
+    elseif cmd == 'targets' then
+        if arg == 'on' then settings.show_targets = true
+        elseif arg == 'off' then settings.show_targets = false
+        else settings.show_targets = not settings.show_targets end
+        msg(settings.show_targets and 'Showing targeting binds (/ta, /target).' or 'Hiding targeting binds (/ta, /target).')
     elseif cmd == 'keywidth' and (arg == 'auto' or tonumber(args[1])) then
         settings.key_width = arg == 'auto' and 0 or math.max(5, math.min(20, math.floor(tonumber(args[1]))))
     elseif cmd == 'pos' and tonumber(args[1]) and tonumber(args[2]) then
