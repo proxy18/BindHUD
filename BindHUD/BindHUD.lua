@@ -16,7 +16,7 @@
 ]]
 
 _addon.name = 'BindHUD'
-_addon.author = 'ffxiHotbar'
+_addon.author = 'BindHUD'
 _addon.version = '0.2.0'
 _addon.commands = { 'bindhud', 'bh' }
 
