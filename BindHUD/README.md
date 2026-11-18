@@ -8,7 +8,7 @@ It is display-only. It never sends packets, never runs commands, never types int
 
 Switch with `//bh view`.
 
-- **Keyboard** (default): a full keyboard with every key in its real position. Each bound key lists all of its binds. The coloured letter in front of each bind is the modifier to hold: **C** Ctrl, **A** Alt, **S** Shift, **W** Win, **-** none. Holding a modifier lights up the keys for that layer and dims the other binds. The Ins/Del/arrow block appears when you have binds there, and the numpad when a numpad key is bound (see `//bh numpad`).
+- **Keyboard** (default): your bound keys in keyboard order, each listing all of its binds. The coloured letter in front of each bind is the modifier to hold: **C** Ctrl, **A** Alt, **S** Shift, **W** Win, **-** none. Holding a modifier lights up the keys for that layer and dims the other binds. The main keys are **packed**: rows stay in keyboard order (F-keys, number row, Q row, A row, Z row) and keys stay left to right, but keys without binds are left out so the board stays compact. The Ins/Del/arrow block and the numpad keep their real grid and appear when you have binds there (see `//bh numpad`). `//bh layout full` shows every key in its real position instead, which is much wider.
 - **Cheat sheet**: every action grouped into spells, job abilities, auto and commands, in alphabetical order, with the keys to press. Use it when you know the spell's name but not its key.
 
 Label colours:
@@ -18,7 +18,7 @@ Label colours:
 - **Auto** (orange): GearSwap toggles and settings whose name starts with "Auto" (Auto Buff, Auto Stun, ...)
 - **Commands** (violet): everything else, such as mode cycles, `gs reload` and `/target`
 
-**Fits any screen.** Key sizes are measured from the font in game, and both views fit themselves to your screen's UI resolution. By default the keyboard keeps within 65% of your screen's width and 45% of its height (`//bh fit`). It uses the largest text that fits and, at that size, the widest keys, since wider keys wrap less and need less height. It stops at text size 6 so it stays readable. On a small screen it can therefore stay larger than the limit. The cheat sheet uses fewer columns on narrow screens. If you set `//bh keywidth` yourself, your setting is used as-is.
+**Fits any screen.** Key sizes are measured from the font in game, and both views fit themselves to your screen's UI resolution. By default the keyboard keeps within 65% of your screen's width and 45% of its height (`//bh fit`). Labels only wrap between words, so keys are always at least wide enough for the longest word on them (very long single words may still break). Within that, it uses the largest text that fits and the widest keys at that size. If that can't fit, it uses the largest layout that fits your screen's width, down to text size 6. On a small screen it can therefore stay larger than the limit. The cheat sheet uses fewer columns on narrow screens. If you set `//bh keywidth` yourself, your setting is used as-is.
 
 ## Install
 
@@ -48,6 +48,7 @@ Commented-out binds are ignored. If the same key and modifiers are bound twice, 
 | `//bh peek` | Switch between always shown (default) and peek, where it only appears while you hold a modifier |
 | `//bh size 10` | Text size; the keys resize to fit |
 | `//bh fit 65 45` | Keep the keyboard within this percentage of your screen's width and height (default 65% wide, 45% tall). `//bh fit off` turns it off so `//bh size` and `//bh keywidth` set the size |
+| `//bh layout` | Switch the keyboard between packed (only keys with binds, default) and full (every key in its real position) |
 | `//bh targets` | Show or hide targeting binds (`/ta`, `/target`), such as alliance targeting on Ctrl/Alt+F1-F6. Hidden by default |
 | `//bh keywidth 8` | Label characters per key. Smaller makes the keyboard narrower (long words break with a hyphen). `//bh keywidth auto` to reset |
 | `//bh numpad auto` | Numpad block: `auto` shows it only when a numpad key is bound, `on` always, `off` never |
