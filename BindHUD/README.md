@@ -13,6 +13,8 @@ Switch with `//bh view`.
 
 Label colours: spell (blue), ability / weapon skill (gold), toggle (orange), cycle (violet), mode (teal), other (grey).
 
+**Fits any screen.** Key sizes are measured from the font in game, and both views fit themselves to your screen's UI resolution. On a smaller screen the keyboard narrows its labels and then its text, and the cheat sheet uses fewer columns. If you set `//bh keywidth` yourself, your setting is used as-is.
+
 ## Install
 
 1. Copy this `BindHUD` folder to `Windower4/addons/BindHUD/`.

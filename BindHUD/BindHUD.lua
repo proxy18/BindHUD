@@ -250,6 +250,7 @@ end
 -- key's rectangle is always created before (and so drawn under) its text.
 -------------------------------------------------------------------------------
 local PREFIX = 'bindhud_'
+local draw_size = nil                   -- text size for this redraw (can be shrunk to fit the screen)
 local pool = { prim = {}, text = {} }   -- names created so far
 local used = { prim = {}, text = {} }   -- names drawn in the current frame
 local next_id = 0
@@ -288,7 +289,7 @@ local function label(x, y, str)
         pool.text[name] = true
     end
     windower.text.set_font(name, settings.display.text.font)
-    windower.text.set_font_size(name, settings.display.text.size)
+    windower.text.set_font_size(name, draw_size or settings.display.text.size)
     windower.text.set_location(name, px(x), px(y))
     windower.text.set_text(name, str)
     windower.text.set_visibility(name, true)
@@ -313,6 +314,16 @@ local function destroy_all()
     for name in pairs(pool.prim) do windower.prim.delete(name) end
     for name in pairs(pool.text) do windower.text.delete(name) end
     pool = { prim = {}, text = {} }
+end
+
+-- The game's UI resolution (what overlay positions are measured in). This is
+-- different for every player, so layouts are fitted to it rather than assumed.
+local function screen_size()
+    local ok, ws = pcall(windower.get_windower_settings)
+    if ok and type(ws) == 'table' and tonumber(ws.ui_x_res) then
+        return tonumber(ws.ui_x_res), tonumber(ws.ui_y_res) or 1080
+    end
+    return 1920, 1080
 end
 
 -------------------------------------------------------------------------------
@@ -456,11 +467,38 @@ local function draw_keyboard(ox, oy)
     local show_pad = settings.numpad == 'on' or (settings.numpad == 'auto' and has_pad)
 
     local bw = max_mods + 1                         -- badge column, in characters
-    -- Label column, in characters: fixed by //bh keywidth, or the smallest width
-    -- (up to 10) that fits every label in two lines.
-    local w = (tonumber(settings.key_width) or 0) > 0 and tonumber(settings.key_width)
-        or bp.pick_width(labels, 7, 10, 2)
     local cw, lh = metrics.cw, metrics.lh
+
+    -- Board width for a given label width (in characters).
+    local function board_width(lw)
+        local unit = (bw + lw) * cw + 2 * KEY_PAD_X
+        local units, blocks_n = 15, 1
+        if has_nav then units, blocks_n = units + 3, blocks_n + 1 end
+        if show_pad then units, blocks_n = units + 4, blocks_n + 1 end
+        return units * (unit + GAP) - blocks_n * GAP + (blocks_n - 1) * unit * 0.35
+    end
+
+    -- Label column, in characters: fixed by //bh keywidth, or automatic: the
+    -- smallest width (up to 10) that fits every label in two lines, narrowed
+    -- further if needed so the whole board fits on this screen.
+    local w
+    if (tonumber(settings.key_width) or 0) > 0 then
+        w = tonumber(settings.key_width)
+    else
+        w = bp.pick_width(labels, 7, 10, 2)
+        local avail = screen_size() - ox - 12
+        -- First narrow the labels (not below 7 characters, which stays readable)...
+        while w > 7 and board_width(w) > avail do w = w - 1 end
+        -- ...then, on small screens, draw the keyboard text a little smaller.
+        local size = settings.display.text.size
+        local cw0, lh0 = cw, lh
+        while board_width(w) > avail and (draw_size or size) > 6 do
+            draw_size = (draw_size or size) - 1
+            cw, lh = cw0 * draw_size / size, lh0 * draw_size / size
+        end
+    end
+    state.too_wide = board_width(w) > screen_size() - ox - 12
+
     local unit = (bw + w) * cw + 2 * KEY_PAD_X      -- width of a 1u key in pixels
     local function kw(u) return u * (unit + GAP) - GAP end
     local block_gap = unit * 0.35
@@ -582,34 +620,45 @@ local function draw_cheatsheet(ox, oy)
         end
     end
 
-    -- Split groups into up to 3 balanced columns (groups are never split).
+    -- Split groups into balanced columns (groups are never split).
     local total = 0
     for _, e in ipairs(entries) do total = total + #e + 1 end
-    local ncol = math.max(1, math.min(3, math.ceil(total / 14)))
-    local target = math.ceil(total / ncol)
-    local cols, cur, count = {}, {}, 0
-    for _, e in ipairs(entries) do
-        if count > 0 and count + #e > target and #cols < ncol - 1 then
-            cols[#cols + 1] = cur
-            cur, count = {}, 0
-        end
-        for _, l in ipairs(e) do cur[#cur + 1] = l end
-        cur[#cur + 1] = { text = '', len = 0 }
-        count = count + #e + 1
-    end
-    cols[#cols + 1] = cur
-
     local cw, lh = metrics.cw, metrics.lh
     local col_gap = cw * 3
-    local widths, max_lines = {}, 0
-    for i, c in ipairs(cols) do
-        local wmax = 0
-        for _, l in ipairs(c) do wmax = math.max(wmax, l.len) end
-        widths[i] = wmax * cw
-        max_lines = math.max(max_lines, #c)
+
+    local function layout(ncol)
+        local target = math.ceil(total / ncol)
+        local cols, cur, count = {}, {}, 0
+        for _, e in ipairs(entries) do
+            if count > 0 and count + #e > target and #cols < ncol - 1 then
+                cols[#cols + 1] = cur
+                cur, count = {}, 0
+            end
+            for _, l in ipairs(e) do cur[#cur + 1] = l end
+            cur[#cur + 1] = { text = '', len = 0 }
+            count = count + #e + 1
+        end
+        cols[#cols + 1] = cur
+        local widths, max_lines, total_w = {}, 0, -col_gap
+        for i, c in ipairs(cols) do
+            local wmax = 0
+            for _, l in ipairs(c) do wmax = math.max(wmax, l.len) end
+            widths[i] = wmax * cw
+            max_lines = math.max(max_lines, #c)
+            total_w = total_w + widths[i] + col_gap
+        end
+        return cols, widths, max_lines, total_w
     end
-    local total_w = -col_gap
-    for _, wv in ipairs(widths) do total_w = total_w + wv + col_gap end
+
+    -- Up to 3 columns, fewer if that is too wide for this screen.
+    local avail = screen_size() - ox - 12
+    local ncol = math.max(1, math.min(3, math.ceil(total / 14)))
+    local cols, widths, max_lines, total_w = layout(ncol)
+    while ncol > 1 and total_w > avail do
+        ncol = ncol - 1
+        cols, widths, max_lines, total_w = layout(ncol)
+    end
+    state.too_wide = total_w > avail
 
     rect(ox - 6, oy - 4, total_w + 12, max_lines * lh + 8, { 8, 10, 14 }, 200)
     local x = ox
@@ -646,8 +695,17 @@ local function render()
     box:text(title_text(view))
     box:show()
 
-    -- The board sits just under the title bar.
+    -- Keep the title bar on screen (e.g. after switching to a smaller resolution).
+    local sw, sh = screen_size()
     local bx, by = box:pos()
+    local cx = math.max(0, math.min(bx, sw - 120))
+    local cy = math.max(0, math.min(by, sh - 60))
+    if cx ~= bx or cy ~= by then
+        box:pos(cx, cy)
+        bx, by = cx, cy
+    end
+
+    -- The board sits just under the title bar.
     local _, bh = box:extents()
     if not bh or bh <= 0 then
         bh = 2 * metrics.lh + 2 * (settings.display.padding or 4)
@@ -656,8 +714,16 @@ local function render()
     local ox, oy = bx + 6, by + bh + 8
 
     begin_frame()
+    draw_size = settings.display.text.size
     if view == 'cheatsheet' then draw_cheatsheet(ox, oy) else draw_keyboard(ox, oy) end
     end_frame()
+
+    -- Say once (in the console) if even the narrowest layout doesn't fit.
+    if not state.too_wide then state.warned_wide = false end
+    if state.too_wide and measured and not state.warned_wide then
+        state.warned_wide = true
+        msg('The overlay is wider than your screen. Try //bh size with a smaller number, //bh keywidth 6, or move it left.')
+    end
 
     -- Font sizes are only known after Windower has laid the text out once;
     -- redraw shortly with the real measurements.
