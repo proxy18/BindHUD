@@ -1,0 +1,14 @@
+# Personal GearSwap files used as local test samples (not shared)
+Whm_Gear.lua
+Globals.lua
+*_Gear.lua
+*Globals.lua
+
+# Windower writes per-user settings here at runtime
+BindHUD/data/
+
+# Editor and OS clutter
+*.bak
+.vscode/
+Thumbs.db
+desktop.ini
