@@ -20,7 +20,7 @@
 
 _addon.name = 'BindHUD'
 _addon.author = 'ProXy'
-_addon.version = '0.3.3'
+_addon.version = '0.3.4'
 _addon.commands = { 'bindhud', 'bh' }
 
 local config = require('config')
