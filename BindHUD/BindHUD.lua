@@ -503,30 +503,47 @@ local function draw_keyboard(ox, oy)
     --           the Ins/Del/arrow block keep their real grid (they are small and
     --           known by position).
     --   full:   every key in its real position.
+    --           Packed keys stay on their own side of the keyboard: keys from
+    --           the left half pack against the left edge, keys from the right
+    --           half against the right edge (so ` and Backspace stay apart).
     local function pack(blk) return packed and blk == 'main' end
     local rows, block_units = {}, {}
     for _, blk in ipairs(blocks) do block_units[blk] = pack(blk) and 0 or BLOCK_UNITS[blk] end
     for _, row in ipairs(FULL_ROWS) do
         local keys, any = {}, false
         for _, blk in ipairs(blocks) do
-            local at = 0
+            local at, left, right = 0, {}, {}
             for _, slot in ipairs(row[blk]) do
                 local k, u = slot[1], slot[2]
                 if pack(blk) then
                     if k and by_key[k] then
-                        keys[#keys + 1] = { k = k, blk = blk, at = at, u = 1 }
-                        at = at + 1
+                        -- Side by the key's real centre on the keyboard.
+                        local s = { k = k, blk = blk, u = 1 }
+                        table.insert((at + u / 2 < BLOCK_UNITS[blk] / 2) and left or right, s)
+                        keys[#keys + 1] = s
                     end
                 else
                     if k then keys[#keys + 1] = { k = k, blk = blk, at = at, u = u } end
-                    at = at + u
                 end
+                at = at + u
                 if k and by_key[k] then any = true end
             end
-            if pack(blk) then block_units[blk] = math.max(block_units[blk], at) end
+            if pack(blk) then
+                for i, s in ipairs(left) do s.at = i - 1 end
+                -- Right-side keys get their final place once the block's width
+                -- (its widest row) is known; remember how many there are.
+                for i, s in ipairs(right) do s.from_right = #right - i + 1 end
+                block_units[blk] = math.max(block_units[blk], #left + #right)
+            end
         end
         if any or not packed then
             rows[#rows + 1] = { keys = keys, has_binds = any, gap_after = row.gap_after and not packed }
+        end
+    end
+    -- Now place the right-side keys flush with the packed block's right edge.
+    for _, r in ipairs(rows) do
+        for _, s in ipairs(r.keys) do
+            if s.from_right then s.at = block_units[s.blk] - s.from_right end
         end
     end
     local key_slot = {}
