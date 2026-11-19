@@ -13,7 +13,7 @@ Switch with `//bh view`.
 
 Label colours:
 
-- **Spells** (blue): `/ma`, songs, ninjutsu
+- **Spells** (cyan): `/ma`, songs, ninjutsu
 - **Job abilities** (gold): `/ja`, weapon skills, pet commands, items
 - **Auto** (orange): GearSwap toggles and settings whose name starts with "Auto" (Auto Buff, Auto Stun, ...)
 - **Commands** (violet): everything else, such as mode cycles, `gs reload` and `/target`

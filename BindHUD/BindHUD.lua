@@ -69,7 +69,7 @@ local COLORS = {
     active  = { 120, 255, 120 },
     group   = { 170, 175, 190 },
     -- bind categories
-    spell   = { 110, 190, 255 },   -- blue
+    spell   = { 70, 235, 225 },    -- cyan (stands apart from violet commands and the blue Ctrl letter)
     ability = { 255, 215, 110 },   -- gold (job abilities, weapon skills, items)
     auto    = { 255, 140, 70 },    -- orange (Auto... toggles and settings)
     command = { 205, 170, 255 },   -- violet (everything else)
